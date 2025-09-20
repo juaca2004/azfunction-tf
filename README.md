@@ -53,7 +53,7 @@ En el archivo provider especifiqué la suscripción de Azure que utilizo para el
 
 provider "azurerm" {
   features {}
-  subscription_id = "5a2e3bca-ca1d-485f-bd8e-49e0b9362ec4"
+  subscription_id = "***************************************"
 }
 
 
