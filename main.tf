@@ -1,85 +1,98 @@
-# Definición del provider que ocuparemos
+
 provider "azurerm" {
   features {}
   subscription_id = "8cb53e20-cd47-46be-94b9-4ef15fa36ea9"
 }
 
-# Se crea el grupo de recursos, al cual se asociarán los demás recursos
+provider "kubernetes" {
+  host                   = azurerm_kubernetes_cluster.aks.kube_config.0.host
+  client_certificate     = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.client_certificate)
+  client_key             = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.client_key)
+  cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.cluster_ca_certificate)
+}
+
+
 resource "azurerm_resource_group" "rg" {
-  name     = var.name_function
+  name     = var.resource_group_name
   location = var.location
 }
 
-# Se crea un Storage Account, para asociarlo al function app (recomendación de la documentación).
-resource "azurerm_storage_account" "sa" {
-  name                     = var.name_function
-  resource_group_name      = azurerm_resource_group.rg.name
-  location                 = azurerm_resource_group.rg.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
+resource "azurerm_kubernetes_cluster" "aks" {
+  name                = var.aks_cluster_name
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  dns_prefix          = replace(lower(var.aks_cluster_name), "_", "-")
+
+  default_node_pool {
+    name       = "default"
+    node_count = var.node_count
+    vm_size    = var.node_vm_size
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  tags = {
+    Environment = "Prueba"
+  }
 }
 
-# Se crea el recurso Service Plan para especificar el nivel de servicio 
-# (por ejemplo, "Consumo", "Functions Premium" o "Plan de App Service"), en este caso "Y1" hace referencia a plan consumo 
-resource "azurerm_service_plan" "sp" {
-  name                = var.name_function
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  os_type             = "Windows"
-  sku_name            = "Y1"
-}
 
-# Se crea la aplicación de Funciones 
-resource "azurerm_windows_function_app" "wfa" {
-  name                = var.name_function
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+resource "kubernetes_deployment" "app" {
+  metadata {
+    name      = "myapp-deployment"
+    labels = {
+      app = "myapp"
+    }
+  }
 
-  storage_account_name       = azurerm_storage_account.sa.name
-  storage_account_access_key = azurerm_storage_account.sa.primary_access_key
-  service_plan_id            = azurerm_service_plan.sp.id
+  spec {
+    replicas = 1
+    selector {
+      match_labels = {
+        app = "myapp"
+      }
+    }
 
-  site_config {
-    application_stack {
-      node_version = "~18"
+    template {
+      metadata {
+        labels = {
+          app = "myapp"
+        }
+      }
+
+      spec {
+        container {
+          name  = "myapp"
+          image = "juaca2004/myapp:latest"
+          port {
+            container_port = 3000
+          }
+        }
+      }
     }
   }
 }
 
-# Se crea una función dentro de la aplicación de funciones
-resource "azurerm_function_app_function" "faf" {
-  name            = var.name_function
-  function_app_id = azurerm_windows_function_app.wfa.id
-  language        = "Javascript"
-  # Se carga el código de ejemplo dentro de la función
-  file {
-    name    = "index.js"
-    content = file("example/index.js")
+resource "kubernetes_service" "app_svc" {
+  metadata {
+    name = "myapp-service"
+    labels = {
+      app = "myapp"
+    }
   }
-  # Se define el payload para los test
-  test_data = jsonencode({
-    "name" = "Azure"
-  })
-  # Se mapean las solicitudes
-  config_json = jsonencode({
-    "bindings" : [
-      {
-        "authLevel" : "anonymous",
-        "type" : "httpTrigger",
-        "direction" : "in",
-        "name" : "req",
-        "methods" : [
-          "get",
-          "post"
-        ]
-      },
-      {
-        "type" : "http",
-        "direction" : "out",
-        "name" : "res"
-      }
-    ]
-  })
+
+  spec {
+    selector = {
+      app = kubernetes_deployment.app.spec[0].template[0].metadata[0].labels.app
+    }
+    port {
+      port        = 80
+      target_port = 3000
+    }
+    type = "LoadBalancer"
+  }
 }
 
 

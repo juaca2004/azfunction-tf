@@ -1,72 +1,149 @@
-Despliegue de una Azure Function con Terraform
+Despliegue de una aplicación en Azure Kubernetes Service (AKS) con Terraform
 
-A continuación detallo los pasos que seguí para clonar el repositorio, autenticarme en Azure y desplegar la función utilizando Terraform.
+A continuación detallo los pasos que seguí para preparar la imagen de la aplicación, autenticarme en Azure y desplegar la infraestructura de Kubernetes utilizando Terraform.
 
-1. Autenticación en Azure
+1. transformacion de a Express.js
 
-Primero inicié sesión en mi cuenta de Azure desde la línea de comandos con:
-
-az login
+convertimos la Azure Function en una aplicación Express.js, fue necesario porque Azure Functions no se ejecutan directamente en AKS.
 
 
-Este comando abrió el navegador para autenticarme con mis credenciales de Azure. Una vez completada la autenticación, la terminal mostró la suscripción activa que se utilizará en el despliegue y ademas el ID que usare mas adelante.
+2. Creacion del packege.json
 
-2. Clonar el repositorio
+Creamos el package.json donde va a contener las dependencias suficientes para que corra la aplicacion, en este caso express version 4.18.2
 
-Cloné el repositorio que contiene los archivos de configuración de Terraform:
+3. Creacion del la imagen
 
-git clone https://github.com/ChristianFlor/azfunction-tf.git
+Al trabajar con kubernetes, nesecitamos la imagen de la aplicacion que vamos a correr, por lo tanto creamos un docker file, donde cargamos el package.json y ademas el index.js. Con esto creamos la imagen y la pusheamos a un respositorio publico, en este caso docker hub para la creacion del cluster.
 
+4. Creacion del main.tf
 
-Después, ingresé al directorio clonado:
+El archivo main.tf define toda la infraestructura necesaria para desplegar una aplicación en Azure Kubernetes Service (AKS) y exponerla públicamente. A continuación se describe el rol de cada sección.
 
-cd azfunction-tf
+Proveedores (Providers)
+  a. provider "azurerm"
 
-3. Inicializar Terraform
+  Configura la conexión con Microsoft Azure para que Terraform pueda crear y administrar recursos en la suscripción especificada.
 
-Inicialicé el proyecto para descargar los proveedores necesarios:
+  features {}: activa las funciones del proveedor sin parámetros adicionales.
 
-terraform init
+  subscription_id: identifica de manera única la suscripción de Azure en la que se crearán los recursos.
 
+  b. provider "kubernetes"
 
-Esto preparó el entorno de trabajo.
+  Permite que Terraform gestione objetos dentro del clúster de Kubernetes recién creado.
 
-4. Formatear archivos de Terraform
+  host y certificados (client_certificate, client_key, cluster_ca_certificate) se obtienen directamente del recurso azurerm_kubernetes_cluster.aks.
 
-A continuación, ejecuté el comando para dar formato a los archivos de configuración y mantener un estilo uniforme:
+Grupo de Recursos
+  resource "azurerm_resource_group" "rg"
 
-terraform fmt
+  Crea un Resource Group en Azure que actúa como contenedor lógico para todos los recursos del proyecto.
 
-5. Crear el plan de ejecución
+  name y location se reciben como variables (var.resource_group_name y var.location), lo que permite reutilizar la configuración en distintas regiones o entornos.
 
-Para visualizar los cambios que se aplicarían en Azure, generé el plan de ejecución:
+Clúster de Kubernetes
 
-terraform plan
+  resource "azurerm_kubernetes_cluster" "aks"
 
+  Define el clúster administrado de Kubernetes en Azure.
+  Principales parámetros:
 
-Durante este proceso, Terraform solicitó el valor de la variable name_function, que en mi caso fue:
+  name y resource_group_name: identifican el clúster y lo asocian al grupo de recursos creado previamente.
 
-Name Function
-  Enter a value: santiago
+  dns_prefix: prefijo para el nombre DNS del clúster.
 
-En el archivo provider especifiqué la suscripción de Azure que utilizo para el despliegue:
+  default_node_pool: especifica el conjunto de nodos donde se ejecutarán los contenedores, incluyendo el tamaño de la máquina virtual (vm_size) y el número de nodos (node_count).
 
-provider "azurerm" {
-  features {}
-  subscription_id = "***************************************"
-}
+  identity: configura la identidad administrada del clúster para integrarse con otros servicios de Azure sin necesidad de credenciales manuales.
 
+  tags: añade metadatos, en este caso para indicar que se trata de un entorno de prueba.
 
-6. Aplicar los cambios en Azure
+  Este recurso es la base de toda la infraestructura, ya que provee el entorno de ejecución para los contenedores.
 
-Finalmente, apliqué la infraestructura definida en los archivos .tf:
+Despliegue de la Aplicación
 
-terraform apply
+  resource "kubernetes_deployment" "app"
 
+  Crea un Deployment dentro del clúster AKS para ejecutar la aplicación.
+  Elementos destacados:
 
-Terraform volvió a solicitar el valor de name_function y, tras confirmar, creó todos los recursos: grupo de recursos, Storage Account, Service Plan, la Azure Function App y la función en JavaScript.
+  metadata: define el nombre del deployment y la etiqueta app = "myapp", usada para identificar y agrupar recursos relacionados.
 
+  replicas: número de instancias de la aplicación (1 en este caso).
 
-Función JavaScript: que responde a solicitudes HTTP y permite probar el servicio.
+  selector y template: establecen la plantilla de los pods, con las etiquetas necesarias para que el Service pueda localizarlos.
 
-El archivo outputs.tf muestra la URL de invocación de la función una vez desplegada.
+  container: indica el nombre del contenedor, la imagen alojada en Docker Hub (juaca2004/myapp:latest) y el puerto interno (3000) en el que escucha la aplicación.
+
+  Este bloque asegura que Kubernetes mantenga al menos una réplica de la aplicación en ejecución.
+
+Servicio de Exposición
+
+  resource "kubernetes_service" "app_svc"
+
+  Define un Service de tipo LoadBalancer para que la aplicación sea accesible desde Internet.
+
+  metadata: establece el nombre del servicio y las etiquetas de identificación.
+
+  selector: vincula el servicio a los pods del Deployment mediante la etiqueta app = "myapp".
+
+  port: expone el puerto 80 hacia el exterior y redirige el tráfico al puerto 3000 de los contenedores.
+
+  type = "LoadBalancer": solicita a Azure la creación de un balanceador de carga con una dirección IP pública.
+
+  Gracias a este recurso, la aplicación puede recibir tráfico externo de forma automática y escalable.
+
+5. Modificacion de variables
+
+Para facilitar la reutilización y permitir cambios sin editar directamente el archivo principal, se definieron varias variables de entrada en un archivo variables.tf.
+Cada variable tiene un tipo, un valor por defecto y, en algunos casos, una breve descripción.
+
+location
+
+    Tipo: string
+
+    Valor por defecto: "westus3"
+
+    Descripción: Indica la región de Azure donde se desplegarán todos los recursos.
+
+    Uso: Permite cambiar la ubicación geográfica del despliegue (por ejemplo, "eastus") sin tocar el código del main.tf.
+
+resource_group_name
+
+    Tipo: string
+
+    Valor por defecto: "aks-rg"
+
+    Descripción: Nombre del grupo de recursos que contendrá el clúster AKS y los objetos asociados.
+
+    Uso: Facilita identificar el entorno o proyecto en Azure.
+
+aks_cluster_name
+
+    Tipo: string
+
+    Valor por defecto: "aks-cluster-2025"
+
+    Descripción: Nombre asignado al clúster de Kubernetes (AKS).
+
+    Uso: Se utiliza para personalizar el nombre del clúster según el entorno (desarrollo, pruebas, producción).
+
+node_count
+
+    Tipo: number
+
+    Valor por defecto: 1
+
+    Descripción: Número de nodos del pool principal en el clúster AKS.
+
+    Uso: Ajustar el tamaño del clúster; por ejemplo, aumentar para soportar más carga.
+
+node_vm_size
+
+    Tipo: string
+
+    Valor por defecto: "Standard_B2s"
+
+    Descripción: Tipo de máquina virtual que se usará para los nodos del clúster.
+
+    Uso: Permite elegir una especificación de hardware distinta (CPU, RAM) según el presupuesto o las necesidades de rendimiento.
