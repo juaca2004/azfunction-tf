@@ -1,72 +1,93 @@
-Despliegue de una Azure Function con Terraform
+### Deployment of an Azure Function with Terraform
 
-A continuación detallo los pasos que seguí para clonar el repositorio, autenticarme en Azure y desplegar la función utilizando Terraform.
+Below are the steps I followed to clone the repository, authenticate with Azure, and deploy the function using Terraform.
 
-1. Autenticación en Azure
+---
 
-Primero inicié sesión en mi cuenta de Azure desde la línea de comandos con:
+#### 1. Azure Authentication
+
+First, I signed in to my Azure account from the command line with:
+
 
 az login
 
 
-Este comando abrió el navegador para autenticarme con mis credenciales de Azure. Una vez completada la autenticación, la terminal mostró la suscripción activa que se utilizará en el despliegue y ademas el ID que usare mas adelante.
+This command opened the browser to authenticate with my Azure credentials.
+Once the authentication was completed, the terminal displayed the active subscription to be used for the deployment, along with the subscription ID that would be needed later.
 
-2. Clonar el repositorio
+---
 
-Cloné el repositorio que contiene los archivos de configuración de Terraform:
+#### 2. Clone the Repository
+
+I cloned the repository containing the Terraform configuration files:
+
 
 git clone https://github.com/ChristianFlor/azfunction-tf.git
 
 
-Después, ingresé al directorio clonado:
+Then, I entered the cloned directory:
 
 cd azfunction-tf
 
-3. Inicializar Terraform
 
-Inicialicé el proyecto para descargar los proveedores necesarios:
+---
+
+#### 3. Initialize Terraform
+
+I initialized the project to download the required providers:
+
 
 terraform init
 
 
-Esto preparó el entorno de trabajo.
+This prepared the working environment.
 
-4. Formatear archivos de Terraform
+---
 
-A continuación, ejecuté el comando para dar formato a los archivos de configuración y mantener un estilo uniforme:
+#### 4. Format Terraform Files
+
+Next, I executed the command to format the configuration files and maintain a consistent style:
+
 
 terraform fmt
 
-5. Crear el plan de ejecución
 
-Para visualizar los cambios que se aplicarían en Azure, generé el plan de ejecución:
+---
+
+#### 5. Create the Execution Plan
+
+To preview the changes that would be applied in Azure, I generated the execution plan:
+
 
 terraform plan
 
 
-Durante este proceso, Terraform solicitó el valor de la variable name_function, que en mi caso fue:
+During this process, Terraform requested the value of the `name_function` variable, which in my case was:
+
 
 Name Function
   Enter a value: santiago
 
-En el archivo provider especifiqué la suscripción de Azure que utilizo para el despliegue:
+In the provider file, I specified the Azure subscription to use for the deployment:
 
+```hcl
 provider "azurerm" {
   features {}
   subscription_id = "***************************************"
 }
+```
 
+---
 
-6. Aplicar los cambios en Azure
+#### 6. Apply Changes to Azure
 
-Finalmente, apliqué la infraestructura definida en los archivos .tf:
+Finally, I applied the infrastructure defined in the `.tf` files:
+
 
 terraform apply
 
 
-Terraform volvió a solicitar el valor de name_function y, tras confirmar, creó todos los recursos: grupo de recursos, Storage Account, Service Plan, la Azure Function App y la función en JavaScript.
+Terraform again requested the `name_function` value and, after confirmation, created all the resources: resource group, Storage Account, Service Plan, the Azure Function App, and the JavaScript function.
 
 
-Función JavaScript: que responde a solicitudes HTTP y permite probar el servicio.
-
-El archivo outputs.tf muestra la URL de invocación de la función una vez desplegada.
+The `outputs.tf` file displays the function’s invocation URL once the deployment is complete.
