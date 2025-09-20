@@ -1,149 +1,113 @@
-Despliegue de una aplicación en Azure Kubernetes Service (AKS) con Terraform
+# Deployment of an Application on Azure Kubernetes Service (AKS) with Terraform
 
-A continuación detallo los pasos que seguí para preparar la imagen de la aplicación, autenticarme en Azure y desplegar la infraestructura de Kubernetes utilizando Terraform.
+Below are the steps I followed to prepare the application image, authenticate to Azure, and deploy the Kubernetes infrastructure using Terraform.
 
-1. transformacion de a Express.js
+## 1. Transformation to Express.js
+We converted the Azure Function into an Express.js application. This was necessary because Azure Functions do not run directly on AKS.
 
-convertimos la Azure Function en una aplicación Express.js, fue necesario porque Azure Functions no se ejecutan directamente en AKS.
+## 2. Creation of package.json
+We created the package.json file to include the dependencies required to run the application, in this case **express version 4.18.2**.
 
+## 3. Creation of the Image
+When working with Kubernetes, we need a container image of the application to be deployed.  
+Therefore, we created a Dockerfile that includes the package.json and the index.js.  
+With this, we built the image and pushed it to a public repository—in this case, **Docker Hub**—for use when creating the cluster.
 
-2. Creacion del packege.json
+## 4. Creation of main.tf
+The **main.tf** file defines all the infrastructure required to deploy an application on Azure Kubernetes Service (AKS) and expose it publicly.  
+Below is the role of each section.
 
-Creamos el package.json donde va a contener las dependencias suficientes para que corra la aplicacion, en este caso express version 4.18.2
+### Providers
 
-3. Creacion del la imagen
+**a. provider "azurerm"**  
+Configures the connection to Microsoft Azure so Terraform can create and manage resources in the specified subscription.
 
-Al trabajar con kubernetes, nesecitamos la imagen de la aplicacion que vamos a correr, por lo tanto creamos un docker file, donde cargamos el package.json y ademas el index.js. Con esto creamos la imagen y la pusheamos a un respositorio publico, en este caso docker hub para la creacion del cluster.
+- `features {}`: enables provider features without additional parameters.  
+- `subscription_id`: uniquely identifies the Azure subscription where resources will be created.
 
-4. Creacion del main.tf
+**b. provider "kubernetes"**  
+Allows Terraform to manage objects within the newly created Kubernetes cluster.
 
-El archivo main.tf define toda la infraestructura necesaria para desplegar una aplicación en Azure Kubernetes Service (AKS) y exponerla públicamente. A continuación se describe el rol de cada sección.
+- `host` and certificates (`client_certificate`, `client_key`, `cluster_ca_certificate`) are obtained directly from the `azurerm_kubernetes_cluster.aks` resource.
 
-Proveedores (Providers)
-  a. provider "azurerm"
+### Resource Group
 
-  Configura la conexión con Microsoft Azure para que Terraform pueda crear y administrar recursos en la suscripción especificada.
+**resource "azurerm_resource_group" "rg"**  
+Creates a Resource Group in Azure that acts as a logical container for all project resources.
 
-  features {}: activa las funciones del proveedor sin parámetros adicionales.
+- `name` and `location` are provided as variables (`var.resource_group_name` and `var.location`), making the configuration reusable across different regions or environments.
 
-  subscription_id: identifica de manera única la suscripción de Azure en la que se crearán los recursos.
+### Kubernetes Cluster
 
-  b. provider "kubernetes"
+**resource "azurerm_kubernetes_cluster" "aks"**  
+Defines the managed Kubernetes cluster in Azure.
 
-  Permite que Terraform gestione objetos dentro del clúster de Kubernetes recién creado.
+Key parameters:
 
-  host y certificados (client_certificate, client_key, cluster_ca_certificate) se obtienen directamente del recurso azurerm_kubernetes_cluster.aks.
+- `name` and `resource_group_name`: identify the cluster and associate it with the previously created resource group.  
+- `dns_prefix`: prefix for the cluster’s DNS name.  
+- `default_node_pool`: specifies the set of nodes where the containers will run, including the virtual machine size (`vm_size`) and the number of nodes (`node_count`).  
+- `identity`: sets up a managed identity for the cluster to integrate with other Azure services without manual credentials.  
+- `tags`: adds metadata, in this case to indicate that it is a test environment.
 
-Grupo de Recursos
-  resource "azurerm_resource_group" "rg"
+This resource forms the foundation of the infrastructure, providing the runtime environment for the containers.
 
-  Crea un Resource Group en Azure que actúa como contenedor lógico para todos los recursos del proyecto.
+### Application Deployment
 
-  name y location se reciben como variables (var.resource_group_name y var.location), lo que permite reutilizar la configuración en distintas regiones o entornos.
+**resource "kubernetes_deployment" "app"**  
+Creates a Deployment inside the AKS cluster to run the application.
 
-Clúster de Kubernetes
+Highlights:
 
-  resource "azurerm_kubernetes_cluster" "aks"
+- `metadata`: defines the deployment name and the label `app = "myapp"`, used to identify and group related resources.  
+- `replicas`: number of application instances (1 in this case).  
+- `selector` and `template`: define the pod template with the labels needed for the Service to locate them.  
+- `container`: specifies the container name, the image hosted on Docker Hub (`juaca2004/myapp:latest`), and the internal port (3000) where the application listens.
 
-  Define el clúster administrado de Kubernetes en Azure.
-  Principales parámetros:
+This block ensures Kubernetes keeps at least one replica of the application running.
 
-  name y resource_group_name: identifican el clúster y lo asocian al grupo de recursos creado previamente.
+### Exposure Service
 
-  dns_prefix: prefijo para el nombre DNS del clúster.
+**resource "kubernetes_service" "app_svc"**  
+Defines a Service of type **LoadBalancer** so the application is accessible from the Internet.
 
-  default_node_pool: especifica el conjunto de nodos donde se ejecutarán los contenedores, incluyendo el tamaño de la máquina virtual (vm_size) y el número de nodos (node_count).
+- `metadata`: sets the service name and identification labels.  
+- `selector`: links the service to the Deployment’s pods using the label `app = "myapp"`.  
+- `port`: exposes port 80 externally and routes traffic to port 3000 in the containers.  
+- `type = "LoadBalancer"`: requests Azure to create a load balancer with a public IP address.
 
-  identity: configura la identidad administrada del clúster para integrarse con otros servicios de Azure sin necesidad de credenciales manuales.
+Thanks to this resource, the application can receive external traffic automatically and scale as needed.
 
-  tags: añade metadatos, en este caso para indicar que se trata de un entorno de prueba.
+## 5. Variable Configuration
+To enable reuse and allow changes without directly editing the main file, several input variables were defined in a **variables.tf** file.  
+Each variable has a type, a default value, and, in some cases, a brief description.
 
-  Este recurso es la base de toda la infraestructura, ya que provee el entorno de ejecución para los contenedores.
+### location
+- **Type:** string  
+- **Default value:** `"westus3"`  
+- **Description:** Specifies the Azure region where all resources will be deployed.  
+- **Usage:** Allows changing the deployment region (for example, `"eastus"`) without modifying main.tf.
 
-Despliegue de la Aplicación
+### resource_group_name
+- **Type:** string  
+- **Default value:** `"aks-rg"`  
+- **Description:** Name of the resource group that will contain the AKS cluster and related objects.  
+- **Usage:** Helps identify the environment or project in Azure.
 
-  resource "kubernetes_deployment" "app"
-
-  Crea un Deployment dentro del clúster AKS para ejecutar la aplicación.
-  Elementos destacados:
-
-  metadata: define el nombre del deployment y la etiqueta app = "myapp", usada para identificar y agrupar recursos relacionados.
-
-  replicas: número de instancias de la aplicación (1 en este caso).
-
-  selector y template: establecen la plantilla de los pods, con las etiquetas necesarias para que el Service pueda localizarlos.
-
-  container: indica el nombre del contenedor, la imagen alojada en Docker Hub (juaca2004/myapp:latest) y el puerto interno (3000) en el que escucha la aplicación.
-
-  Este bloque asegura que Kubernetes mantenga al menos una réplica de la aplicación en ejecución.
-
-Servicio de Exposición
-
-  resource "kubernetes_service" "app_svc"
-
-  Define un Service de tipo LoadBalancer para que la aplicación sea accesible desde Internet.
-
-  metadata: establece el nombre del servicio y las etiquetas de identificación.
-
-  selector: vincula el servicio a los pods del Deployment mediante la etiqueta app = "myapp".
-
-  port: expone el puerto 80 hacia el exterior y redirige el tráfico al puerto 3000 de los contenedores.
-
-  type = "LoadBalancer": solicita a Azure la creación de un balanceador de carga con una dirección IP pública.
-
-  Gracias a este recurso, la aplicación puede recibir tráfico externo de forma automática y escalable.
-
-5. Modificacion de variables
-
-Para facilitar la reutilización y permitir cambios sin editar directamente el archivo principal, se definieron varias variables de entrada en un archivo variables.tf.
-Cada variable tiene un tipo, un valor por defecto y, en algunos casos, una breve descripción.
-
-location
-
-    Tipo: string
-
-    Valor por defecto: "westus3"
-
-    Descripción: Indica la región de Azure donde se desplegarán todos los recursos.
-
-    Uso: Permite cambiar la ubicación geográfica del despliegue (por ejemplo, "eastus") sin tocar el código del main.tf.
-
-resource_group_name
-
-    Tipo: string
-
-    Valor por defecto: "aks-rg"
-
-    Descripción: Nombre del grupo de recursos que contendrá el clúster AKS y los objetos asociados.
-
-    Uso: Facilita identificar el entorno o proyecto en Azure.
-
-aks_cluster_name
-
-    Tipo: string
-
-    Valor por defecto: "aks-cluster-2025"
-
-    Descripción: Nombre asignado al clúster de Kubernetes (AKS).
-
-    Uso: Se utiliza para personalizar el nombre del clúster según el entorno (desarrollo, pruebas, producción).
-
-node_count
-
-    Tipo: number
-
-    Valor por defecto: 1
-
-    Descripción: Número de nodos del pool principal en el clúster AKS.
-
-    Uso: Ajustar el tamaño del clúster; por ejemplo, aumentar para soportar más carga.
-
-node_vm_size
-
-    Tipo: string
-
-    Valor por defecto: "Standard_B2s"
-
-    Descripción: Tipo de máquina virtual que se usará para los nodos del clúster.
-
-    Uso: Permite elegir una especificación de hardware distinta (CPU, RAM) según el presupuesto o las necesidades de rendimiento.
+### aks_cluster_name
+- **Type:** string  
+- **Default value:** `"aks-cluster-2025"`  
+- **Description:** Name assigned to the Kubernetes (AKS) cluster.  
+- **Usage:** Used to customize the cluster name depending on the environment (development, testing, production).
+
+### node_count
+- **Type:** number  
+- **Default value:** 1  
+- **Description:** Number of nodes in the main pool of the AKS cluster.  
+- **Usage:** Adjust the cluster size; for example, increase to handle more load.
+
+### node_vm_size
+- **Type:** string  
+- **Default value:** `"Standard_B2s"`  
+- **Description:** Virtual machine size to be used for the cluster nodes.  
+- **Usage:** Allows choosing different hardware specifications (CPU, RAM) based on budget or performance needs.
