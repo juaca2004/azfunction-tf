@@ -116,7 +116,8 @@ Each variable has a type, a default value, and, in some cases, a brief descripti
 EVIDENCE
 <img width="1137" height="175" alt="image" src="https://github.com/user-attachments/assets/dd36e53f-e83d-4339-a883-d7a7a7946426" />
 
-<img width="503" height="166" alt="image" src="https://github.com/user-attachments/assets/00762a99-cb16-486a-a8eb-577eaa2bacaa" />
+<img width="1058" height="137" alt="image" src="https://github.com/user-attachments/assets/de1ffad9-1684-4222-ac9e-4617cd670919" />
+
 
 ![Imagen de WhatsApp 2025-09-22 a las 19 54 53_62919579](https://github.com/user-attachments/assets/b0a903cd-76b4-4b61-a1d1-2f70ccd2d78c)
 
