@@ -86,8 +86,14 @@ Finally, I applied the infrastructure defined in the `.tf` files:
 
 terraform apply
 
+<img width="1015" height="156" alt="image" src="https://github.com/user-attachments/assets/6d6d5961-beb7-456b-bab9-1fa86eeb02a8" />
+
+
 
 Terraform again requested the `name_function` value and, after confirmation, created all the resources: resource group, Storage Account, Service Plan, the Azure Function App, and the JavaScript function.
 
 
 The `outputs.tf` file displays the function’s invocation URL once the deployment is complete.
+
+<img width="1037" height="150" alt="image" src="https://github.com/user-attachments/assets/076c16d5-5a9e-443f-ab51-40271cce8124" />
+
