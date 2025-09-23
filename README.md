@@ -111,3 +111,38 @@ Each variable has a type, a default value, and, in some cases, a brief descripti
 - **Default value:** `"Standard_B2s"`  
 - **Description:** Virtual machine size to be used for the cluster nodes.  
 - **Usage:** Allows choosing different hardware specifications (CPU, RAM) based on budget or performance needs.
+
+
+EVIDENCE
+<img width="1137" height="175" alt="image" src="https://github.com/user-attachments/assets/dd36e53f-e83d-4339-a883-d7a7a7946426" />
+
+<img width="503" height="166" alt="image" src="https://github.com/user-attachments/assets/00762a99-cb16-486a-a8eb-577eaa2bacaa" />
+
+![Imagen de WhatsApp 2025-09-22 a las 19 54 53_62919579](https://github.com/user-attachments/assets/b0a903cd-76b4-4b61-a1d1-2f70ccd2d78c)
+
+
+LENS
+
+After finishing uploading the cluster, we can visualize its operation. For this, we use Lens. Lens is a free and open-source desktop application known as the Kubernetes IDE (Integrated Development Environment).
+Simply put, it's a visual tool for managing and observing Kubernetes clusters, without having to rely solely on the command line.
+
+To connect it to our cluster, the first thing is to configure kubectl with the AKS cluster context. Applying this command
+
+`az aks get-credentials --resource-group aks-rg --name aks-cluster-2025`
+
+This will download the credentials locally.
+
+![Imagen de WhatsApp 2025-09-22 a las 19 55 06_8204e24f](https://github.com/user-attachments/assets/237037ba-6b1f-4419-b8e4-e0ddcf1c43ef)
+
+Now it's time to open Lens and select "Add from kubeconfig" in the + Add Cluster menu.
+
+Lens will automatically read ~/.kube/config.
+
+The AKS cluster will appear in the list; select it and it will be connected.
+
+![Imagen de WhatsApp 2025-09-22 a las 19 52 33_3c4647ee](https://github.com/user-attachments/assets/ea921acd-9dc9-4d71-8644-8eb9122b77e5)
+Here we can see the deployment running, where our express.js image is.
+![Imagen de WhatsApp 2025-09-22 a las 19 53 53_a1b8d049](https://github.com/user-attachments/assets/5706b37a-e2bc-4024-8766-0e4bc956bc5e)
+
+
+
